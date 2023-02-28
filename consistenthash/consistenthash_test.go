@@ -1,7 +1,6 @@
 package consistenthash
 
 import (
-	"fmt"
 	"math/rand"
 	"strconv"
 	"testing"
@@ -18,24 +17,7 @@ func Randstr(n int) string {
 	return string(str)
 }
 
-func TestConsistentHash1(t *testing.T) {
-	m := New(3, nil)
-	m.Add("node1", "node2", "node3")
-
-	c := make(map[string]int)
-
-	fmt.Println(m.keys)
-
-	for i := 0; i < 100000; i++ {
-		key := Randstr(4)
-		node := m.Get(key)
-		c[node]++
-		//fmt.Println(node)
-	}
-	fmt.Println(c)
-}
-
-func TestConsistentHash2(t *testing.T) {
+func TestConsistentHash(t *testing.T) {
 	m := New(3, func(b []byte) uint32 {
 		i, _ := strconv.Atoi(string(b))
 		return uint32(i)

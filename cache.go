@@ -6,6 +6,7 @@ import (
 	"xcache/lru"
 )
 
+//线程安全
 type cache struct {
 	mu         sync.Mutex
 	lru        *lru.Cache
