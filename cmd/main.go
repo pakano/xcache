@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 	"xcache"
 	"xcache/cache"
+	"xcache/xcachepb"
 )
 
 var db = map[string]string{
@@ -25,35 +27,42 @@ func createGroup() *xcache.Group {
 	}))
 }
 
-func startCacheServer(addr string, peers []string, g *xcache.Group) {
-	pool := xcache.NewHttpPool(addr)
-	pool.SetPeers(peers...)
-	g.RegisterPeers(pool)
-	log.Println("xcache is running at", addr)
-
-	log.Fatalln(http.ListenAndServe(addr[7:], pool))
+func startCacheServer(addr string, registryAddr string, g *xcache.Group) {
+	pool := xcache.NewHttpPool(addr, registryAddr)
+	log.Println("cache server is running at", addr)
+	log.Fatalln(http.ListenAndServe(addr, pool))
 }
 
-func startAPIServer(apiAddr string) {
+func startRegistry(addr string) *xcache.HttpClient {
+	timeout := time.Second * 10
+	httpClient := xcache.NewHttpClient(3, nil, time.Second*10, addr)
+	httpClient.Run(timeout / 3)
+	return httpClient
+}
+
+func startAPIServer(apiAddr string, httpclient *xcache.HttpClient) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api", func(w http.ResponseWriter, r *http.Request) {
 		group := r.URL.Query().Get("group")
 		key := r.URL.Query().Get("key")
-		g := xcache.GetGroup(group)
-		if g == nil {
-			http.Error(w, "group not found", http.StatusNotFound)
+		peer, ok := httpclient.PeerPicker(key)
+		if !ok {
+			http.Error(w, "no cache server", http.StatusNotFound)
 			return
 		}
-		v, err := g.Get(key)
+
+		in := xcachepb.Request{Group: group, Key: key}
+		out := new(xcachepb.Response)
+		err := peer.Get(&in, out)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Write(v.ByteSlice())
+		w.Write(out.GetValue())
 	})
 	log.Println("api server is running in", apiAddr)
-	log.Fatal(http.ListenAndServe(apiAddr[7:], mux))
+	log.Fatal(http.ListenAndServe(apiAddr, mux))
 }
 
 func main() {
@@ -63,22 +72,13 @@ func main() {
 	flag.BoolVar(&api, "api", false, "Start a api server")
 	flag.Parse()
 
-	apiAddr := "http://192.168.4.41:9999"
-	addrMap := map[int]string{
-		8001: "http://192.168.4.41:8001",
-		8002: "http://192.168.4.41:8002",
-		8003: "http://192.168.4.41:8003",
-	}
+	registryAddr := "192.168.4.41:9899"
 
-	var addrs []string
-	for _, addr := range addrMap {
-		addrs = append(addrs, addr)
-	}
-
-	g := createGroup()
 	if api {
-		startAPIServer(apiAddr)
+		httpclient := startRegistry(registryAddr)
+		startAPIServer(":9898", httpclient)
 	} else {
-		startCacheServer(addrMap[port], addrs, g)
+		g := createGroup()
+		startCacheServer(fmt.Sprintf("127.0.0.1:%d", port), registryAddr, g)
 	}
 }

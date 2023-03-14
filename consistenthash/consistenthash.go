@@ -4,11 +4,13 @@ import (
 	"hash/crc32"
 	"sort"
 	"strconv"
+	"sync"
 )
 
 type Hash func([]byte) uint32
 
 type Map struct {
+	mu       sync.RWMutex
 	hash     Hash
 	replicas int
 	keys     []uint32
@@ -29,6 +31,9 @@ func New(replicas int, fn Hash) *Map {
 }
 
 func (m *Map) Add(keys ...string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	for _, key := range keys {
 		for i := 0; i < m.replicas; i++ {
 			h := m.hash([]byte(strconv.Itoa(i) + key))
@@ -42,6 +47,9 @@ func (m *Map) Add(keys ...string) {
 }
 
 func (m *Map) Get(key string) string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	if len(key) == 0 {
 		return ""
 	}
@@ -59,6 +67,9 @@ func (m *Map) Get(key string) string {
 }
 
 func (m *Map) Del(key string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if len(key) == 0 {
 		return
 	}
