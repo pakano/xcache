@@ -59,3 +59,27 @@ func TestConsistentHashDel(t *testing.T) {
 	m.Del("1")
 	assert.Equal(t, m.keys, []uint32{2, 3, 12, 13, 22, 23})
 }
+
+/*
+goos: linux
+goarch: amd64
+pkg: xcache/consistenthash
+cpu: Intel(R) Xeon(R) CPU E5-2620 v3 @ 2.40GHz
+BenchmarkXxx-12         18219883                65.70 ns/op            0 B/op          0 allocs/op
+PASS
+ok      xcache/consistenthash   1.275s
+*/
+func BenchmarkXxx(b *testing.B) {
+	m := New(3, nil)
+	peers := []string{
+		"http://127.0.0.1:8080",
+		"http://127.0.0.1:8081",
+		"http://127.0.0.1:8082",
+	}
+	m.Add(peers...)
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		m.Get("1")
+	}
+}

@@ -18,7 +18,7 @@ type HttpPool struct {
 }
 
 func NewHttpPool(self string, registryAddr string) *HttpPool {
-	servicediscover.Heartbeat(fmt.Sprintf("http://%s", registryAddr), fmt.Sprintf("http://%s", self), 3*time.Second)
+	servicediscover.Heartbeat(fmt.Sprintf("http://%s", registryAddr), fmt.Sprintf("http://%s", self), 27*time.Second)
 	return &HttpPool{
 		self:     self,
 		basePath: defalutBasePath,

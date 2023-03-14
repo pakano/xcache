@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 	"xcache/consistenthash"
+	"xcache/signalflight"
 	"xcache/xcachepb"
 
 	servicediscover "xcache/service_discover"
@@ -22,7 +23,7 @@ const (
 )
 
 type HttpClient struct {
-	mu           sync.Mutex
+	mu           sync.RWMutex
 	peers        *consistenthash.Map
 	httpGetter   map[string]*httpGetter
 	registry     *servicediscover.Registry
@@ -47,6 +48,8 @@ func (p *HttpClient) Run(discoveryCycle time.Duration) {
 	go func() {
 		c := servicediscover.NewGeeRegistryDiscovery(fmt.Sprintf("http://%s", p.registryAddr), discoveryCycle)
 		ticker := time.NewTicker(discoveryCycle)
+		c.Refresh()
+		p.SetPeers(c.Servers()...)
 		for {
 			<-ticker.C
 			c.Refresh()
@@ -62,14 +65,15 @@ func (p *HttpClient) SetPeers(peers ...string) {
 	p.peers.Add(peers...)
 	p.httpGetter = make(map[string]*httpGetter)
 	for _, peer := range peers {
-		p.httpGetter[peer] = &httpGetter{baseURL: peer + defalutBasePath}
+		p.httpGetter[peer] = &httpGetter{baseURL: peer + defalutBasePath, loader: new(signalflight.Group)}
 	}
 }
 
 //实现PeerPicker接口
 func (p *HttpClient) PeerPicker(key string) (PeerGetter, bool) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
 	if peer := p.peers.Get(key); peer != "" {
 		return p.httpGetter[peer], true
 	}
@@ -78,35 +82,58 @@ func (p *HttpClient) PeerPicker(key string) (PeerGetter, bool) {
 
 type httpGetter struct {
 	baseURL string
+	loader  *signalflight.Group
+}
+
+var client *http.Client
+
+func init() {
+	tr := http.DefaultTransport.(*http.Transport)
+	tr2 := tr.Clone()
+	tr2.MaxConnsPerHost = 20
+	client = &http.Client{
+		Timeout:   time.Second * 2,
+		Transport: tr,
+	}
 }
 
 //实现PeerGetter接口
 func (h *httpGetter) Get(in *xcachepb.Request, out *xcachepb.Response) error {
 	u := fmt.Sprintf(
-		"%v%v/%v",
+		"%s%s/%s",
 		h.baseURL,
 		url.QueryEscape(in.Group),
 		url.QueryEscape(in.Key),
 	)
 
-	res, err := http.Get(u)
+	//保护远程结点,提高性能
+	v, err := h.loader.Do(in.Group+in.Key, func() (value interface{}, err error) {
+		res, err := client.Get(u)
+		if err != nil {
+			return nil, err
+		}
+		defer res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("server returned: %v", res.Status)
+		}
+
+		bytes, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			return nil, fmt.Errorf("reading response body: %v", err)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("reading response body: %v", err)
+		}
+
+		if err = proto.Unmarshal(bytes, out); err != nil {
+			return nil, err
+		}
+		return out, nil
+	})
 	if err != nil {
 		return err
 	}
-	defer res.Body.Close()
-
-	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("server returned: %v", res.Status)
-	}
-
-	bytes, err := ioutil.ReadAll(res.Body)
-	if err != nil {
-		return fmt.Errorf("reading response body: %v", err)
-	}
-
-	if err = proto.Unmarshal(bytes, out); err != nil {
-		return err
-	}
+	out = v.(*xcachepb.Response)
 
 	return nil
 }

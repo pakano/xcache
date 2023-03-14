@@ -34,8 +34,8 @@ func startCacheServer(addr string, registryAddr string, g *xcache.Group) {
 }
 
 func startRegistry(addr string) *xcache.HttpClient {
-	timeout := time.Second * 10
-	httpClient := xcache.NewHttpClient(3, nil, time.Second*10, addr)
+	timeout := time.Second * 30
+	httpClient := xcache.NewHttpClient(3, nil, timeout, addr)
 	httpClient.Run(timeout / 3)
 	return httpClient
 }
@@ -45,7 +45,7 @@ func startAPIServer(apiAddr string, httpclient *xcache.HttpClient) {
 	mux.HandleFunc("/api", func(w http.ResponseWriter, r *http.Request) {
 		group := r.URL.Query().Get("group")
 		key := r.URL.Query().Get("key")
-		peer, ok := httpclient.PeerPicker(key)
+		peerGetter, ok := httpclient.PeerPicker(key)
 		if !ok {
 			http.Error(w, "no cache server", http.StatusNotFound)
 			return
@@ -53,7 +53,7 @@ func startAPIServer(apiAddr string, httpclient *xcache.HttpClient) {
 
 		in := xcachepb.Request{Group: group, Key: key}
 		out := new(xcachepb.Response)
-		err := peer.Get(&in, out)
+		err := peerGetter.Get(&in, out)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -76,9 +76,9 @@ func main() {
 
 	if api {
 		httpclient := startRegistry(registryAddr)
-		startAPIServer(":9898", httpclient)
+		startAPIServer("192.168.4.41:9898", httpclient)
 	} else {
 		g := createGroup()
-		startCacheServer(fmt.Sprintf("127.0.0.1:%d", port), registryAddr, g)
+		startCacheServer(fmt.Sprintf("192.168.4.41:%d", port), registryAddr, g)
 	}
 }

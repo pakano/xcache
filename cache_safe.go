@@ -9,7 +9,7 @@ import (
 )
 
 type Cache struct {
-	mu    sync.Mutex
+	mu    sync.RWMutex
 	cache cache.Cache
 }
 
@@ -32,12 +32,13 @@ func NewCache(cacheType cache.CacheType, maxBytes int, onEvicted func(string, ca
 func (c *Cache) set(key string, value ByteView) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
 	c.cache.Set(key, value)
 }
 
 func (c *Cache) get(key string) (value ByteView, ok bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
 	if v, ok := c.cache.Get(key); ok {
 		return v.(ByteView), true

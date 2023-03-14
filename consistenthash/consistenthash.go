@@ -2,9 +2,11 @@ package consistenthash
 
 import (
 	"hash/crc32"
+	"reflect"
 	"sort"
 	"strconv"
 	"sync"
+	"unsafe"
 )
 
 type Hash func([]byte) uint32
@@ -54,7 +56,8 @@ func (m *Map) Get(key string) string {
 		return ""
 	}
 
-	h := m.hash([]byte(key))
+	b := String2Bytes(key)
+	h := m.hash(b)
 
 	idx := sort.Search(len(m.keys), func(i int) bool {
 		return m.keys[i] >= h
@@ -86,4 +89,10 @@ func (m *Map) Del(key string) {
 		m.keys = m.keys[:k]
 		delete(m.hashMap, h)
 	}
+}
+
+//go:noinline
+func String2Bytes(s string) []byte {
+	sh := (*reflect.StringHeader)(unsafe.Pointer(&s))
+	return *(*[]byte)(unsafe.Pointer(sh))
 }
