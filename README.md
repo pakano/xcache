@@ -6,7 +6,7 @@
 
 2.内存淘汰算法：LRU、LFU、FIFO
 
-3.防缓存击穿中间件signalflight
+3.防缓存击穿中间件signalflight(多线程访问数据源优化利器)
 
 4.一致性哈希
 ![输入图片说明](hash.png)
