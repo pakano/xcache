@@ -2,7 +2,7 @@
 
 #### 介绍
 1.高性能分布式缓存
-[图片上传中…(image-yQVcKi8pUnVUGPkdaItP)]
+![输入图片说明](image.png)
 2.内存淘汰算法：LRU、LFU、FIFO
 3.
 
