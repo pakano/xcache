@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"xcache/cache"
 	"xcache/signalflight"
 	"xcache/xcachepb"
 )
@@ -23,7 +24,7 @@ func (f GetterFunc) Get(key string) ([]byte, error) {
 type Group struct {
 	name       string
 	getter     Getter
-	maincache  *cache
+	maincache  *Cache
 	peerPicker PeerPicker
 	loader     *signalflight.Group //保护数据源
 }
@@ -33,7 +34,7 @@ var (
 	groups = make(map[string]*Group)
 )
 
-func NewGroup(name string, cacheBytes int64, getter Getter) *Group {
+func NewGroup(name string, cacheType cache.CacheType, cacheBytes int, getter Getter) *Group {
 	if getter == nil {
 		panic("getter is nil")
 	}
@@ -44,7 +45,7 @@ func NewGroup(name string, cacheBytes int64, getter Getter) *Group {
 	g := &Group{
 		name:      name,
 		getter:    getter,
-		maincache: &cache{cacheBytes: cacheBytes},
+		maincache: NewCache(cacheType, cacheBytes, nil),
 		loader:    new(signalflight.Group),
 	}
 

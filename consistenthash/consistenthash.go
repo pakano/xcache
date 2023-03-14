@@ -57,3 +57,22 @@ func (m *Map) Get(key string) string {
 	//虚拟节点到实体结点
 	return m.hashMap[m.keys[idx]]
 }
+
+func (m *Map) Del(key string) {
+	if len(key) == 0 {
+		return
+	}
+
+	for i := 0; i < m.replicas; i++ {
+		h := m.hash([]byte(strconv.Itoa(i) + key))
+		k := 0
+		for j := range m.keys {
+			if m.keys[j] != h {
+				m.keys[k] = m.keys[j]
+				k++
+			}
+		}
+		m.keys = m.keys[:k]
+		delete(m.hashMap, h)
+	}
+}

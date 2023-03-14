@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"xcache"
+	"xcache/cache"
 )
 
 var db = map[string]string{
@@ -15,7 +16,7 @@ var db = map[string]string{
 }
 
 func createGroup() *xcache.Group {
-	return xcache.NewGroup("demo", 2<<10, xcache.GetterFunc(func(key string) ([]byte, error) {
+	return xcache.NewGroup("demo", cache.LFUCACHE, 2<<10, xcache.GetterFunc(func(key string) ([]byte, error) {
 		log.Println("[SlowDB] search key", key)
 		if data, ok := db[key]; ok {
 			return []byte(data), nil
@@ -33,10 +34,16 @@ func startCacheServer(addr string, peers []string, g *xcache.Group) {
 	log.Fatalln(http.ListenAndServe(addr[7:], pool))
 }
 
-func startAPIServer(apiAddr string, g *xcache.Group) {
+func startAPIServer(apiAddr string) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api", func(w http.ResponseWriter, r *http.Request) {
+		group := r.URL.Query().Get("group")
 		key := r.URL.Query().Get("key")
+		g := xcache.GetGroup(group)
+		if g == nil {
+			http.Error(w, "group not found", http.StatusNotFound)
+			return
+		}
 		v, err := g.Get(key)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -70,7 +77,8 @@ func main() {
 
 	g := createGroup()
 	if api {
-		go startAPIServer(apiAddr, g)
+		startAPIServer(apiAddr)
+	} else {
+		startCacheServer(addrMap[port], addrs, g)
 	}
-	startCacheServer(addrMap[port], addrs, g)
 }

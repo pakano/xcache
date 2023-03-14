@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func Randstr(n int) string {
@@ -43,4 +45,17 @@ func TestConsistentHash(t *testing.T) {
 			t.Errorf("Asking for %s, should have yielded %s", k, v)
 		}
 	}
+}
+
+func TestConsistentHashDel(t *testing.T) {
+	m := New(3, func(b []byte) uint32 {
+		i, _ := strconv.Atoi(string(b))
+		return uint32(i)
+	})
+
+	m.Add("1", "2", "3")
+	assert.Equal(t, m.keys, []uint32{1, 2, 3, 11, 12, 13, 21, 22, 23})
+
+	m.Del("1")
+	assert.Equal(t, m.keys, []uint32{2, 3, 12, 13, 22, 23})
 }

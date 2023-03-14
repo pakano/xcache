@@ -44,7 +44,7 @@ func (h *HttpPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// fmt.Println(h.basePath)
+	//fmt.Println(r.URL.Path)
 
 	parts := strings.SplitN(r.URL.Path[len(h.basePath):], "/", 2)
 	if len(parts) != 2 {
@@ -94,7 +94,6 @@ func (p *HttpPool) PeerPicker(key string) (PeerGetter, bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if peer := p.peers.Get(key); peer != "" && peer != p.self {
-		//
 		return p.httpGetter[peer], true
 	}
 	return nil, false
